@@ -105,9 +105,8 @@ namespace Lemegeton.Core
         {
             
             public State State { get; set; }
-            public Delegate Function { get; set; } = null;
+            public Action Function { get; set; } = null;
             public string CommandText { get; set; }
-            public object[] Params { get; set; }
             public DateTime FireAt { get; set; } = DateTime.MinValue;
             public uint ActorId { get; set; } = 0;
             public bool RequiresFrameworkThread { get; set; } = false;
@@ -150,7 +149,7 @@ namespace Lemegeton.Core
                 {
                     if (Function != null)
                     {
-                        Function.DynamicInvoke(Params);                        
+                        Function();
                     }
                     else
                     {
@@ -1695,12 +1694,15 @@ namespace Lemegeton.Core
                 {                    
                     startTime = startTime.AddMilliseconds(delay);
                     Log(LogLevelEnum.Debug, null, "At {0}, mark actor {1:X} with {2} on instance {3}", startTime, go, kp.Key, _runInstance);
+                    ulong run = _runInstance;
+                    IGameObject actor = go;
+                    AutomarkerSigns.SignEnum sign = kp.Key;
+                    bool soft = ap.softMarker;
                     DeferredInvoke di = new DeferredInvoke()
                     {
                         State = this,
                         RequiresFrameworkThread = true,
-                        Function = (MarkingMethodDelegate)PerformMarking,
-                        Params = new object[] { _runInstance, go, kp.Key, ap.softMarker },
+                        Function = () => PerformMarking(run, actor, sign, soft),
                         FireAt = startTime
                     };
                     QueueInvocation(di);
@@ -1910,12 +1912,14 @@ namespace Lemegeton.Core
                         Log(LogLevelEnum.Debug, null, "Using function pointer to remove mark on actor {0} by reassigning {1}", go, marker);
                         if (cfg.DebugOnlyLogAutomarkers == false)
                         {
+                            nint markingCtrl = _sigs["MarkingCtrl"];
+                            byte markerId = (byte)AutomarkerSigns.GetSignIndex(marker);
+                            uint actorId = (uint)go.GameObjectId;
                             DeferredInvoke di = new DeferredInvoke()
                             {
                                 State = this,
                                 RequiresFrameworkThread = true,
-                                Function = _markingFuncPtr,
-                                Params = new object[] { _sigs["MarkingCtrl"], (byte)AutomarkerSigns.GetSignIndex(marker), (uint)go.GameObjectId }
+                                Function = () => _markingFuncPtr(markingCtrl, markerId, actorId)
                             };                            
                             QueueInvocation(di);
                         }
@@ -2069,12 +2073,14 @@ namespace Lemegeton.Core
                     if (cfg.DebugOnlyLogAutomarkers == false)
                     {
                         _markersApplied = true;
+                        nint markingCtrl = _sigs["MarkingCtrl"];
+                        byte markerId = (byte)AutomarkerSigns.GetSignIndex(sign);
+                        uint actorId = (uint)go.GameObjectId;
                         DeferredInvoke di = new DeferredInvoke()
                         {
                             State = this,
                             RequiresFrameworkThread = true,
-                            Function = _markingFuncPtr,
-                            Params = new object[] { _sigs["MarkingCtrl"], (byte)AutomarkerSigns.GetSignIndex(sign), (uint)go.GameObjectId },
+                            Function = () => _markingFuncPtr(markingCtrl, markerId, actorId),
                             FireAt = cleared == true ? DateTime.Now.AddMilliseconds(750) : DateTime.Now
                         };
                         QueueInvocation(di);
